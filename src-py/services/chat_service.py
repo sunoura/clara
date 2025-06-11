@@ -11,13 +11,23 @@ from .interaction_service import InteractionService
 
 
 class ChatService:
+    """
+    Clara Chat Service
+    
+    Handles message processing, AI response generation, and database storage.
+    Integrates with Gemini AI for intelligent responses.
+    """
+    
     def __init__(self):
         self.gemini_client = GeminiClient()
         self.interaction_service = InteractionService()
     
     def send_message(self, session_id: str, message: str, db_session: Session) -> Dict:
         """
-        Send a message and get AI response, storing both in the database.
+        Process a user message and generate Clara's AI response.
+        
+        Stores both user message and AI response in the database.
+        Returns structured data for both messages with database IDs.
         
         Args:
             session_id: The interaction session ID
@@ -25,7 +35,7 @@ class ChatService:
             db_session: Database session
             
         Returns:
-            Dict containing the AI response and metadata
+            Dict containing user_message and ai_response data with IDs
         """
         # Verify session exists
         interaction_session = self.interaction_service.get_session(db_session, session_id)
@@ -33,7 +43,6 @@ class ChatService:
             raise ValueError(f"Session {session_id} not found")
         
         # Store user message
-        print(f"DEBUG: About to create user payload for session {session_id}: '{message}'")
         user_payload = InteractionPayloadCreate(
             session_id=session_id,
             content=message,
@@ -41,7 +50,6 @@ class ChatService:
             **{"from": InteractionFrom.USER}
         )
         user_record = self.interaction_service.create_payload(db_session, user_payload)
-        print(f"DEBUG: Created user payload with ID {user_record.id}")
         
         try:
             # Get conversation history

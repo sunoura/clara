@@ -10,6 +10,7 @@
 
 	const isUser = message.from === 'user';
 	const hasError = !message.ok || !!message.err;
+	const isLoading = message.isLoading || false;
 </script>
 
 <div class={cn('flex gap-3 p-4', isUser ? 'justify-end' : 'justify-start')}>
@@ -24,7 +25,7 @@
 			{#if isUser}
 				U
 			{:else}
-				AI
+				C
 			{/if}
 		</div>
 
@@ -33,11 +34,19 @@
 			class={cn(
 				'rounded-lg px-3 py-2 text-sm',
 				isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-				hasError && 'border border-destructive'
+				hasError && 'border border-destructive',
+				isLoading && 'animate-pulse'
 			)}
 		>
 			<div class="whitespace-pre-wrap break-words">
-				{message.content}
+				{#if isLoading}
+					<span class="inline-flex items-center gap-1">
+						{message.content}
+						<span class="text-xs">●●●</span>
+					</span>
+				{:else}
+					{message.content}
+				{/if}
 			</div>
 
 			{#if hasError && message.err}

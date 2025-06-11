@@ -1,11 +1,18 @@
-// Global chat state using Svelte 5 runes
+/**
+ * Clara Chat Application State Management
+ * 
+ * This module manages the global chat state using Svelte 5 runes.
+ * Provides real-time WebSocket communication with instant UI feedback.
+ */
+
 export interface ChatMessage {
   id: number;
   content: string;
   from: 'user' | 'model';
   ok: boolean;
-  err?: string;
+  err?: string; 
   created_at: string;
+  isLoading?: boolean; // Used for loading states like "Clara is thinking..."
 }
 
 export interface ChatSession {
@@ -73,81 +80,82 @@ export async function createSession(title: string, contextSummary?: string): Pro
   }
 }
 
+/**
+ * Send a message via WebSocket with instant UI feedback.
+ * 
+ * Flow:
+ * 1. Show user message immediately (temporary)
+ * 2. Show "Clara is thinking..." (temporary)  
+ * 3. Send via WebSocket
+ * 4. WebSocket handlers replace temporary messages with real data
+ */
 export async function sendMessage(content: string): Promise<void> {
   if (!chatState.currentSession) return;
 
   try {
-    chatState.isLoading = true;
     chatState.error = null;
 
     // Import wsState here to avoid circular dependencies
     const { wsState } = await import('./wsState.svelte.js');
     
-    // Send message via WebSocket if connected
-    if (wsState.isConnected) {
-      const success = wsState.sendMessage(content);
-      if (success) {
-        chatState.inputValue = ''; // Clear input on successful send
-        return;
+    // Only use WebSocket - no HTTP fallback
+    if (!wsState.isConnected) {
+      chatState.error = 'Not connected to chat server. Please refresh the page.';
+      return;
+    }
+
+    // Clear input immediately for responsive feel
+    chatState.inputValue = '';
+
+    // Add user message immediately to UI (with temporary negative ID)
+    const tempUserMessage = {
+      id: -Date.now(), // Negative ID to avoid conflicts with real database IDs
+      content: content,
+      from: 'user' as const,
+      ok: true,
+      created_at: new Date().toISOString()
+    };
+    chatState.messages.push(tempUserMessage);
+
+    // Add Clara loading message immediately
+    const tempLoadingMessage = {
+      id: -Date.now() - 1, // Negative ID to avoid conflicts
+      content: 'Clara is thinking...',
+      from: 'model' as const,
+      ok: true,
+      isLoading: true,
+      created_at: new Date().toISOString()
+    };
+    chatState.messages.push(tempLoadingMessage);
+
+    // Send via WebSocket - responses will update the UI via handlers
+    const success = wsState.sendMessage(content);
+    if (!success) {
+      // Remove loading message and show error on user message
+      const loadingIndex = chatState.messages.findIndex(m => m.id === tempLoadingMessage.id);
+      if (loadingIndex !== -1) {
+        chatState.messages.splice(loadingIndex, 1);
+      }
+      
+      const userIndex = chatState.messages.findIndex(m => m.id === tempUserMessage.id);
+      if (userIndex !== -1) {
+        chatState.messages[userIndex] = {
+          ...chatState.messages[userIndex],
+          ok: false,
+          err: 'Failed to send message'
+        };
       }
     }
 
-    // Fallback to HTTP if WebSocket is not available
-    await sendMessageHTTP(content);
-
   } catch (error) {
     chatState.error = error instanceof Error ? error.message : 'Failed to send message';
-  } finally {
-    chatState.isLoading = false;
   }
 }
 
-// HTTP fallback for sending messages
-async function sendMessageHTTP(content: string): Promise<void> {
-  if (!chatState.currentSession) return;
 
-  // Clear input immediately
-  chatState.inputValue = '';
-
-  // Use chat endpoint which handles both user message creation and AI response
-  const response = await fetch(`${API_BASE}/chat/${chatState.currentSession.id}/message`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      content
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to send message');
-  }
-
-  const data = await response.json();
-  
-  // Add user message to local state
-  chatState.messages.push({
-    id: data.user_message.id,
-    content: data.user_message.content,
-    from: 'user',
-    ok: true,
-    created_at: data.user_message.created_at
-  });
-  
-  // Add AI message to local state  
-  chatState.messages.push({
-    id: data.ai_response.id,
-    content: data.ai_response.content,
-    from: 'model',
-    ok: true,
-    created_at: data.ai_response.created_at
-  });
-}
 
 export async function loadSession(sessionId: string): Promise<void> {
   try {
-    console.log($state.snapshot(chatState));
     chatState.isLoading = true;
     chatState.error = null;
 
@@ -227,25 +235,59 @@ export function startNewSession(): void {
 export async function connectWebSocket(sessionId: string): Promise<void> {
   const { wsState } = await import('./wsState.svelte.js');
   
-  // Set up WebSocket handlers
+  // Connect to session FIRST
+  wsState.connect(sessionId);
+  
+  // THEN set up WebSocket handlers (after connection to avoid them being cleared)
   wsState.setHandlers({
     onUserMessage: (message) => {
-      console.log('Received user message via WebSocket:', message);
-      chatState.messages.push(message);
+      // Find and replace temporary user message with real one
+      const tempUserIndex = chatState.messages.findIndex(m => m.id < 0 && m.from === 'user' && m.content === message.content);
+      if (tempUserIndex !== -1) {
+        chatState.messages[tempUserIndex] = {
+          id: message.id,
+          content: message.content,
+          from: message.from,
+          ok: message.ok,
+          err: message.err,
+          created_at: message.created_at
+        };
+      } else {
+        // If no temp message found, just add it (shouldn't happen normally)
+        chatState.messages.push(message);
+      }
     },
     onAiResponse: (message) => {
-      console.log('Received AI message via WebSocket:', message);
-      chatState.messages.push(message);
+      // Find and replace the loading message with Clara's real response
+      const loadingIndex = chatState.messages.findIndex(m => m.isLoading === true);
+      
+      if (loadingIndex !== -1) {
+        chatState.messages[loadingIndex] = {
+          id: message.id,
+          content: message.content,
+          from: message.from,
+          ok: message.ok,
+          err: message.err,
+          created_at: message.created_at
+        };
+      } else {
+        // If no loading message found, just add it (fallback)
+        chatState.messages.push(message);
+      }
+      
       chatState.isLoading = false;
     },
     onError: (error) => {
+      // Remove any loading messages
+      const loadingIndex = chatState.messages.findIndex(m => m.isLoading === true);
+      if (loadingIndex !== -1) {
+        chatState.messages.splice(loadingIndex, 1);
+      }
+      
       chatState.error = error;
       chatState.isLoading = false;
     }
   });
-  
-  // Connect to session
-  wsState.connect(sessionId);
 }
 
 export async function disconnectWebSocket(): Promise<void> {

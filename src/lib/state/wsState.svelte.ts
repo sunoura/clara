@@ -1,3 +1,10 @@
+/**
+ * WebSocket State Management for Clara Chat
+ * 
+ * Handles real-time communication with the chat server.
+ * Manages connection state, reconnection logic, and message routing.
+ */
+
 import type { ChatMessage } from './chatState.svelte.js';
 
 interface WebSocketMessage {
@@ -172,6 +179,8 @@ class WebSocketState {
           } else {
             console.warn('Received AI response without payload_id, ignoring:', message.content);
           }
+        } else {
+          console.warn('AI response missing required fields or handler');
         }
         break;
 
