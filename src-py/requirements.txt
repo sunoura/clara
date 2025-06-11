@@ -1,0 +1,11 @@
+fastapi
+sqlmodel
+pydantic
+uvicorn[standard]
+python-multipart
+pytest
+pytest-asyncio
+httpx
+alembic
+python-dotenv
+chromadb
