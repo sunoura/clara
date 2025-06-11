@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from db import create_db_and_tables
 
-from routes import api_router
+from api import api_router
 
 
 @asynccontextmanager

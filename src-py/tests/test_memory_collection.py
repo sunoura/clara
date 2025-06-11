@@ -3,19 +3,20 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from data.models import MemoryCollectionCreate, MemoryCollectionUpdate
-from routes.memory_collection.ops import MemoryCollectionOps
+from services.memory_collection_service import MemoryCollectionService
 
 
-class TestMemoryCollectionOps:
-    """Test the MemoryCollectionOps class"""
+class TestMemoryCollectionService:
+    """Test the MemoryCollectionService class"""
 
     def test_create_collection(self, session: Session):
         """Test creating a memory collection"""
+        service = MemoryCollectionService()
         collection_data = MemoryCollectionCreate(
             title="Test Collection",
             description="A test collection"
         )
-        collection = MemoryCollectionOps.create_collection(session, collection_data)
+        collection = service.create_collection(session, collection_data)
         
         assert collection.id is not None
         assert collection.title == "Test Collection"
@@ -26,7 +27,8 @@ class TestMemoryCollectionOps:
 
     def test_get_collection(self, session: Session, sample_memory_collection):
         """Test getting a memory collection by ID"""
-        collection = MemoryCollectionOps.get_collection(session, sample_memory_collection.id)
+        service = MemoryCollectionService()
+        collection = service.get_collection(session, sample_memory_collection.id)
         
         assert collection is not None
         assert collection.id == sample_memory_collection.id
@@ -34,18 +36,21 @@ class TestMemoryCollectionOps:
 
     def test_get_collection_not_found(self, session: Session):
         """Test getting a non-existent collection"""
-        collection = MemoryCollectionOps.get_collection(session, 999)
+        service = MemoryCollectionService()
+        collection = service.get_collection(session, 999)
         assert collection is None
 
     def test_get_collections(self, session: Session, sample_memory_collection):
         """Test getting all collections"""
-        collections = MemoryCollectionOps.get_collections(session)
+        service = MemoryCollectionService()
+        collections = service.get_collections(session)
         
         assert len(collections) >= 1
         assert any(c.id == sample_memory_collection.id for c in collections)
 
     def test_update_collection(self, session: Session, sample_memory_collection):
         """Test updating a memory collection"""
+        service = MemoryCollectionService()
         original_updated_at = sample_memory_collection.updated_at
         
         update_data = MemoryCollectionUpdate(
@@ -53,7 +58,7 @@ class TestMemoryCollectionOps:
             description="Updated description"
         )
         
-        updated_collection = MemoryCollectionOps.update_collection(
+        updated_collection = service.update_collection(
             session, sample_memory_collection.id, update_data
         )
         
@@ -64,7 +69,8 @@ class TestMemoryCollectionOps:
 
     def test_archive_collection(self, session: Session, sample_memory_collection):
         """Test archiving a memory collection"""
-        archived_collection = MemoryCollectionOps.archive_collection(
+        service = MemoryCollectionService()
+        archived_collection = service.archive_collection(
             session, sample_memory_collection.id
         )
         
@@ -72,7 +78,7 @@ class TestMemoryCollectionOps:
         assert archived_collection.archived_at is not None
         
         # Verify it doesn't appear in regular queries
-        collections = MemoryCollectionOps.get_collections(session)
+        collections = service.get_collections(session)
         assert not any(c.id == sample_memory_collection.id for c in collections)
 
 

@@ -3,21 +3,22 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from data.models import MemoryDocumentCreate, MemoryDocumentUpdate
-from routes.memory_document.ops import MemoryDocumentOps
+from services.memory_document_service import MemoryDocumentService
 
 
-class TestMemoryDocumentOps:
-    """Test the MemoryDocumentOps class"""
+class TestMemoryDocumentService:
+    """Test the MemoryDocumentService class"""
 
     def test_create_document(self, session: Session, sample_memory_collection):
         """Test creating a memory document"""
+        service = MemoryDocumentService()
         document_data = MemoryDocumentCreate(
             chroma_id="test_chroma_123",
             content="Test document content",
             collection_id=sample_memory_collection.id,
             metadatas={"type": "test", "priority": "medium"}
         )
-        document = MemoryDocumentOps.create_document(session, document_data)
+        document = service.create_document(session, document_data)
         
         assert document.id is not None
         assert document.chroma_id == "test_chroma_123"
@@ -29,7 +30,8 @@ class TestMemoryDocumentOps:
 
     def test_get_document(self, session: Session, sample_memory_document):
         """Test getting a memory document by ID"""
-        document = MemoryDocumentOps.get_document(session, sample_memory_document.id)
+        service = MemoryDocumentService()
+        document = service.get_document(session, sample_memory_document.id)
         
         assert document is not None
         assert document.id == sample_memory_document.id
@@ -37,12 +39,14 @@ class TestMemoryDocumentOps:
 
     def test_get_document_not_found(self, session: Session):
         """Test getting a non-existent document"""
-        document = MemoryDocumentOps.get_document(session, 999)
+        service = MemoryDocumentService()
+        document = service.get_document(session, 999)
         assert document is None
 
     def test_get_document_by_chroma_id(self, session: Session, sample_memory_document):
         """Test getting a document by ChromaDB ID"""
-        document = MemoryDocumentOps.get_document_by_chroma_id(
+        service = MemoryDocumentService()
+        document = service.get_document_by_chroma_id(
             session, sample_memory_document.chroma_id
         )
         
@@ -52,7 +56,8 @@ class TestMemoryDocumentOps:
 
     def test_get_documents_by_collection(self, session: Session, sample_memory_document):
         """Test getting documents by collection"""
-        documents = MemoryDocumentOps.get_documents_by_collection(
+        service = MemoryDocumentService()
+        documents = service.get_documents_by_collection(
             session, sample_memory_document.collection_id
         )
         
@@ -61,13 +66,15 @@ class TestMemoryDocumentOps:
 
     def test_get_documents(self, session: Session, sample_memory_document):
         """Test getting all documents"""
-        documents = MemoryDocumentOps.get_documents(session)
+        service = MemoryDocumentService()
+        documents = service.get_documents(session)
         
         assert len(documents) >= 1
         assert any(d.id == sample_memory_document.id for d in documents)
 
     def test_update_document(self, session: Session, sample_memory_document):
         """Test updating a memory document"""
+        service = MemoryDocumentService()
         original_updated_at = sample_memory_document.updated_at
         
         update_data = MemoryDocumentUpdate(
@@ -75,7 +82,7 @@ class TestMemoryDocumentOps:
             metadatas={"updated": True, "priority": "high"}
         )
         
-        updated_document = MemoryDocumentOps.update_document(
+        updated_document = service.update_document(
             session, sample_memory_document.id, update_data
         )
         
@@ -85,7 +92,8 @@ class TestMemoryDocumentOps:
 
     def test_archive_document(self, session: Session, sample_memory_document):
         """Test archiving a memory document"""
-        archived_document = MemoryDocumentOps.archive_document(
+        service = MemoryDocumentService()
+        archived_document = service.archive_document(
             session, sample_memory_document.id
         )
         
@@ -93,14 +101,15 @@ class TestMemoryDocumentOps:
         assert archived_document.archived_at is not None
         
         # Verify it doesn't appear in regular queries
-        documents = MemoryDocumentOps.get_documents(session)
+        documents = service.get_documents(session)
         assert not any(d.id == sample_memory_document.id for d in documents)
 
     def test_search_documents(self, session: Session, sample_memory_document):
         """Test searching documents by content"""
+        service = MemoryDocumentService()
         # Search for part of the content
         search_term = "test memory document"
-        documents = MemoryDocumentOps.search_documents(session, search_term)
+        documents = service.search_documents(session, search_term)
         
         assert len(documents) >= 1
         assert any(d.id == sample_memory_document.id for d in documents)

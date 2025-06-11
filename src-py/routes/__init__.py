@@ -26,9 +26,13 @@ def create_api_router() -> APIRouter:
     api_router.include_router(memory_collection_router)
     api_router.include_router(memory_document_router)
     
-    # Interaction and chat routes
+    # Interaction routes
     api_router.include_router(interaction_session_router)
     api_router.include_router(interaction_payload_router)
+    
+    # Chat routes (flat structure)
+    from api.chat_routes import router as chat_router
+    api_router.include_router(chat_router)
 
     return api_router
 
