@@ -80,70 +80,20 @@ export async function sendMessage(content: string): Promise<void> {
     chatState.isLoading = true;
     chatState.error = null;
 
-    // Add user message
-    const userPayloadResponse = await fetch(`${API_BASE}/interaction-payloads/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        session_id: chatState.currentSession.id,
-        content,
-        from: 'user',
-        ok: true
-      })
-    });
-
-    if (!userPayloadResponse.ok) {
-      throw new Error('Failed to send message');
+    // Import wsState here to avoid circular dependencies
+    const { wsState } = await import('./wsState.svelte.js');
+    
+    // Send message via WebSocket if connected
+    if (wsState.isConnected) {
+      const success = wsState.sendMessage(content);
+      if (success) {
+        chatState.inputValue = ''; // Clear input on successful send
+        return;
+      }
     }
 
-    const userPayload = await userPayloadResponse.json();
-    
-    // Add user message to local state
-    chatState.messages.push({
-      id: userPayload.id,
-      content: userPayload.content,
-      from: 'user',
-      ok: userPayload.ok,
-      err: userPayload.err,
-      created_at: userPayload.created_at
-    });
-
-    // Clear input
-    chatState.inputValue = '';
-
-    // Simulate AI response (replace with actual AI integration later)
-    const aiResponse = `This is a simulated response to: "${content}"`;
-    
-    const aiPayloadResponse = await fetch(`${API_BASE}/interaction-payloads/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        session_id: chatState.currentSession.id,
-        content: aiResponse,
-        from: 'model',
-        ok: true
-      })
-    });
-
-    if (!aiPayloadResponse.ok) {
-      throw new Error('Failed to get AI response');
-    }
-
-    const aiPayload = await aiPayloadResponse.json();
-    
-    // Add AI message to local state
-    chatState.messages.push({
-      id: aiPayload.id,
-      content: aiPayload.content,
-      from: 'model',
-      ok: aiPayload.ok,
-      err: aiPayload.err,
-      created_at: aiPayload.created_at
-    });
+    // Fallback to HTTP if WebSocket is not available
+    await sendMessageHTTP(content);
 
   } catch (error) {
     chatState.error = error instanceof Error ? error.message : 'Failed to send message';
@@ -152,10 +102,57 @@ export async function sendMessage(content: string): Promise<void> {
   }
 }
 
+// HTTP fallback for sending messages
+async function sendMessageHTTP(content: string): Promise<void> {
+  if (!chatState.currentSession) return;
+
+  // Clear input immediately
+  chatState.inputValue = '';
+
+  // Use chat endpoint which handles both user message creation and AI response
+  const response = await fetch(`${API_BASE}/chat/${chatState.currentSession.id}/message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      content
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to send message');
+  }
+
+  const data = await response.json();
+  
+  // Add user message to local state
+  chatState.messages.push({
+    id: data.user_message.id,
+    content: data.user_message.content,
+    from: 'user',
+    ok: true,
+    created_at: data.user_message.created_at
+  });
+  
+  // Add AI message to local state  
+  chatState.messages.push({
+    id: data.ai_response.id,
+    content: data.ai_response.content,
+    from: 'model',
+    ok: true,
+    created_at: data.ai_response.created_at
+  });
+}
+
 export async function loadSession(sessionId: string): Promise<void> {
   try {
+    console.log($state.snapshot(chatState));
     chatState.isLoading = true;
     chatState.error = null;
+
+    // FIRST: Disconnect any existing WebSocket to prevent cross-session interference
+    await disconnectWebSocket();
 
     // Load session details
     const sessionResponse = await fetch(`${API_BASE}/interaction-sessions/${sessionId}`);
@@ -181,6 +178,11 @@ export async function loadSession(sessionId: string): Promise<void> {
       err: payload.err,
       created_at: payload.created_at
     }));
+
+    // THEN: Connect to WebSocket for real-time communication
+    // Add a small delay to ensure clean disconnection
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await connectWebSocket(sessionId);
 
   } catch (error) {
     chatState.error = error instanceof Error ? error.message : 'Failed to load session';
@@ -214,4 +216,39 @@ export function startNewSession(): void {
   chatState.messages = [];
   chatState.inputValue = '';
   chatState.error = null;
+  
+  // Disconnect WebSocket when starting new session
+  import('./wsState.svelte.js').then(({ wsState }) => {
+    wsState.disconnect();
+  });
+}
+
+// WebSocket integration functions
+export async function connectWebSocket(sessionId: string): Promise<void> {
+  const { wsState } = await import('./wsState.svelte.js');
+  
+  // Set up WebSocket handlers
+  wsState.setHandlers({
+    onUserMessage: (message) => {
+      console.log('Received user message via WebSocket:', message);
+      chatState.messages.push(message);
+    },
+    onAiResponse: (message) => {
+      console.log('Received AI message via WebSocket:', message);
+      chatState.messages.push(message);
+      chatState.isLoading = false;
+    },
+    onError: (error) => {
+      chatState.error = error;
+      chatState.isLoading = false;
+    }
+  });
+  
+  // Connect to session
+  wsState.connect(sessionId);
+}
+
+export async function disconnectWebSocket(): Promise<void> {
+  const { wsState } = await import('./wsState.svelte.js');
+  wsState.disconnect();
 } 

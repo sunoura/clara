@@ -35,7 +35,7 @@
 	});
 </script>
 
-<div class="border-t bg-white p-4">
+<div class="border-t bg-background p-4">
 	<form
 		onsubmit={(e) => {
 			e.preventDefault();

@@ -18,7 +18,7 @@
 		<div
 			class={cn(
 				'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium',
-				isUser ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-900'
+				isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
 			)}
 		>
 			{#if isUser}
@@ -32,8 +32,8 @@
 		<div
 			class={cn(
 				'rounded-lg px-3 py-2 text-sm',
-				isUser ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-900',
-				hasError && 'border border-red-500'
+				isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+				hasError && 'border border-destructive'
 			)}
 		>
 			<div class="whitespace-pre-wrap break-words">
@@ -41,7 +41,7 @@
 			</div>
 
 			{#if hasError && message.err}
-				<div class="mt-2 flex items-center gap-1 text-xs text-red-500">
+				<div class="mt-2 flex items-center gap-1 text-xs text-destructive">
 					⚠️ {message.err}
 				</div>
 			{/if}

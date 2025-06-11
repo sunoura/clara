@@ -3,6 +3,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import ChatMessage from './ChatMessage.svelte';
 	import ChatInput from './ChatInput.svelte';
+	import ToggleTheme from '$lib/components/ToggleTheme.svelte';
 	import { Trash2 } from 'lucide-svelte';
 	import {
 		chatState,
@@ -83,20 +84,18 @@
 	}
 </script>
 
-<div class="flex h-screen bg-white">
+<div class="flex h-screen bg-background">
 	<!-- Sidebar -->
-	<div class="w-80 border-r bg-zinc-50 flex flex-col">
+	<div class="w-80 border-r bg-muted/30 flex flex-col">
 		<!-- Header -->
-		<div class="p-4 border-b">
-			<h1 class="text-lg font-semibold text-zinc-900">Chat Sessions</h1>
-			<Button onclick={handleStartNewSession} variant="outline" class="w-full mt-2">
-				+ New Chat
-			</Button>
+		<div class="p-4 border-b bg-background flex items-center gap-2 justify-between">
+			<Button onclick={handleStartNewSession} variant="outline" class="flex-1">+ New Chat</Button>
+			<ToggleTheme />
 		</div>
 
 		<!-- New session form -->
 		{#if showNewSessionForm}
-			<div class="p-4 border-b bg-white">
+			<div class="p-4 border-b bg-card">
 				<Input bind:value={newSessionTitle} placeholder="Session title..." class="mb-2" />
 				<div class="flex gap-2">
 					<Button onclick={handleNewSession} size="sm" disabled={!newSessionTitle.trim()}>
@@ -112,20 +111,22 @@
 		<!-- Sessions list -->
 		<div class="flex-1 overflow-y-auto">
 			{#if chatState.sessions.length === 0}
-				<div class="p-4 text-sm text-zinc-500">No sessions yet. Create one to start chatting.</div>
+				<div class="p-4 text-sm text-muted-foreground">
+					No sessions yet. Create one to start chatting.
+				</div>
 			{:else}
 				{#each chatState.sessions as session (session.id)}
 					<button
 						class={cn(
-							'w-full text-left p-3 border-b hover:bg-white transition-colors',
-							chatState.currentSession?.id === session.id && 'bg-white border-l-2 border-l-zinc-900'
+							'w-full text-left p-3 border-b hover:bg-accent transition-colors',
+							chatState.currentSession?.id === session.id && 'bg-accent border-l-2 border-l-primary'
 						)}
 						onclick={() => handleLoadSession(session.id)}
 					>
-						<div class="font-medium text-sm text-zinc-900 truncate">
+						<div class="font-medium text-sm text-foreground truncate">
 							{session.title}
 						</div>
-						<div class="text-xs text-zinc-500 mt-1">
+						<div class="text-xs text-muted-foreground mt-1">
 							{new Date(session.started_at).toLocaleDateString()}
 						</div>
 					</button>
@@ -135,11 +136,11 @@
 
 		<!-- Loading/Error state -->
 		{#if chatState.isLoading}
-			<div class="p-4 text-sm text-zinc-500">Loading...</div>
+			<div class="p-4 text-sm text-muted-foreground">Loading...</div>
 		{/if}
 
 		{#if chatState.error}
-			<div class="p-4 text-sm text-red-500">
+			<div class="p-4 text-sm text-destructive">
 				Error: {chatState.error}
 			</div>
 		{/if}
@@ -149,13 +150,13 @@
 	<div class="flex-1 flex flex-col">
 		{#if chatState.currentSession}
 			<!-- Chat header -->
-			<div class="p-4 border-b bg-white flex items-center justify-between">
+			<div class="p-4 border-b bg-background flex items-center justify-between">
 				<div class="flex-1">
-					<h2 class="font-semibold text-zinc-900">
+					<h2 class="font-semibold text-foreground">
 						{chatState.currentSession.title}
 					</h2>
 					{#if chatState.currentSession.context_summary}
-						<p class="text-sm text-zinc-500 mt-1">
+						<p class="text-sm text-muted-foreground mt-1">
 							{chatState.currentSession.context_summary}
 						</p>
 					{/if}
@@ -173,7 +174,7 @@
 			<!-- Messages -->
 			<div bind:this={messagesContainer} class="flex-1 overflow-y-auto">
 				{#if chatState.messages.length === 0}
-					<div class="flex items-center justify-center h-full text-zinc-500">
+					<div class="flex items-center justify-center h-full text-muted-foreground">
 						Start a conversation by typing a message below
 					</div>
 				{:else}
@@ -189,8 +190,8 @@
 			<!-- Welcome screen -->
 			<div class="flex-1 flex items-center justify-center">
 				<div class="text-center">
-					<h2 class="text-xl font-semibold text-zinc-900 mb-2">Welcome to Chat</h2>
-					<p class="text-zinc-500 mb-4">
+					<h2 class="text-xl font-semibold text-foreground mb-2">Welcome to Chat</h2>
+					<p class="text-muted-foreground mb-4">
 						Select a session from the sidebar or create a new one to start chatting
 					</p>
 					<Button onclick={handleStartNewSession}>Start New Chat</Button>

@@ -33,6 +33,7 @@ class ChatService:
             raise ValueError(f"Session {session_id} not found")
         
         # Store user message
+        print(f"DEBUG: About to create user payload for session {session_id}: '{message}'")
         user_payload = InteractionPayloadCreate(
             session_id=session_id,
             content=message,
@@ -40,6 +41,7 @@ class ChatService:
             **{"from": InteractionFrom.USER}
         )
         user_record = self.interaction_service.create_payload(db_session, user_payload)
+        print(f"DEBUG: Created user payload with ID {user_record.id}")
         
         try:
             # Get conversation history
@@ -58,6 +60,17 @@ class ChatService:
             ai_payload_record = self.interaction_service.create_payload(db_session, ai_payload)
             
             return {
+                "user_message": {
+                    "id": user_record.id,
+                    "content": user_record.content,
+                    "created_at": user_record.created_at
+                },
+                "ai_response": {
+                    "id": ai_payload_record.id,
+                    "content": ai_response,
+                    "created_at": ai_payload_record.created_at
+                },
+                # Keep legacy fields for backward compatibility
                 "response": ai_response,
                 "payload_id": ai_payload_record.id,
                 "created_at": ai_payload_record.created_at
