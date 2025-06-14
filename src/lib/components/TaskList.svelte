@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Plus, Trash2, Check } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
 	import { taskState } from '$lib/state/taskState.svelte';
 	import { claraAPI } from '$lib/api/clara';
 
@@ -35,8 +34,25 @@
 	let hoveredTaskIndex = $state<number | null>(null);
 	let hoveredParent = $state<Task | null>(null);
 
-	// Individual hover states for each task
-	let hoveredTaskId = $state<number | null>(null);
+	// Store original status for inheritance logic
+	let originalTaskStatuses = $state<Map<number, 'todo' | 'in-progress' | 'done' | 'archived'>>(
+		new Map()
+	);
+
+	// Initialize original statuses when tasks change
+	$effect(() => {
+		function initializeOriginalStatuses(tasks: Task[]) {
+			for (const task of tasks) {
+				if (!originalTaskStatuses.has(task.id)) {
+					originalTaskStatuses.set(task.id, task.status);
+				}
+				if (task.subtasks) {
+					initializeOriginalStatuses(task.subtasks);
+				}
+			}
+		}
+		initializeOriginalStatuses(taskState.tasks);
+	});
 
 	// Reactive swapping logic
 	$effect(() => {
@@ -212,8 +228,24 @@
 	async function toggleTaskComplete(task: Task) {
 		try {
 			const newStatus = task.status === 'done' ? 'todo' : 'done';
-			// Update locally first
+
+			// Store original status before any changes
+			if (!originalTaskStatuses.has(task.id)) {
+				originalTaskStatuses.set(task.id, task.status);
+			}
+
+			// Update parent task
 			task.status = newStatus;
+
+			// Handle child inheritance
+			if (newStatus === 'done') {
+				// Parent is being marked done - children inherit unless already done
+				updateChildrenStatus(task, 'done', false);
+			} else {
+				// Parent is being unmarked - children revert to original status if they weren't originally done
+				updateChildrenStatus(task, 'todo', true);
+			}
+
 			taskState.saveTasks();
 
 			// Try to update backend
@@ -221,16 +253,77 @@
 				try {
 					await claraAPI.updateTask(task.id, { status: newStatus });
 					console.log(`Task ${task.id} status updated to ${newStatus} in backend`);
+
+					// Update all affected children in backend
+					await updateChildrenInBackend(task);
 				} catch (error) {
 					console.error('Failed to update task status in backend:', error);
-					// Rollback status change
+					// Rollback all changes
 					task.status = task.status === 'done' ? 'todo' : 'done';
+					revertChildrenStatus(task);
 					taskState.saveTasks();
 					alert('Failed to update task status. Please try again.');
 				}
 			}
 		} catch (error) {
 			console.error('Failed to toggle task completion:', error);
+		}
+	}
+
+	function updateChildrenStatus(task: Task, newStatus: 'todo' | 'done', respectOriginal: boolean) {
+		if (!task.subtasks) return;
+
+		for (const child of task.subtasks) {
+			// Store original status if not already stored
+			if (!originalTaskStatuses.has(child.id)) {
+				originalTaskStatuses.set(child.id, child.status);
+			}
+
+			if (respectOriginal) {
+				// Reverting parent - only change children that weren't originally done
+				const originalStatus = originalTaskStatuses.get(child.id);
+				if (originalStatus !== 'done') {
+					child.status = newStatus;
+				}
+			} else {
+				// Parent being marked done - inherit unless already done
+				if (child.status !== 'done') {
+					child.status = newStatus;
+				}
+			}
+
+			// Recursively update grandchildren
+			updateChildrenStatus(child, newStatus, respectOriginal);
+		}
+	}
+
+	async function updateChildrenInBackend(task: Task) {
+		if (!task.subtasks) return;
+
+		for (const child of task.subtasks) {
+			try {
+				await claraAPI.updateTask(child.id, { status: child.status });
+				console.log(`Child task ${child.id} status updated to ${child.status} in backend`);
+			} catch (error) {
+				console.error(`Failed to update child task ${child.id} in backend:`, error);
+			}
+
+			// Recursively update grandchildren
+			await updateChildrenInBackend(child);
+		}
+	}
+
+	function revertChildrenStatus(task: Task) {
+		if (!task.subtasks) return;
+
+		for (const child of task.subtasks) {
+			const originalStatus = originalTaskStatuses.get(child.id);
+			if (originalStatus) {
+				child.status = originalStatus;
+			}
+
+			// Recursively revert grandchildren
+			revertChildrenStatus(child);
 		}
 	}
 
@@ -295,7 +388,6 @@
 		draggingFromParent = null;
 		hoveredTaskIndex = null;
 		hoveredParent = null;
-		hoveredTaskId = null;
 	}
 </script>
 
@@ -389,11 +481,7 @@
 </div>
 
 {#snippet taskCard(task: Task, index: number, parentNumbers: number[], parentTask?: Task)}
-	<div
-		class="group"
-		onmouseenter={() => (hoveredTaskId = task.id)}
-		onmouseleave={() => (hoveredTaskId = null)}
-	>
+	<div class="group">
 		<div
 			class="flex items-center gap-3 cursor-move"
 			draggable="true"
@@ -404,8 +492,7 @@
 		>
 			<!-- Drag handle -->
 			<div
-				class="text-gray-400 hover:text-gray-600 opacity-0 transition-opacity"
-				class:opacity-100={hoveredTaskId === task.id}
+				class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
 			>
 				⋮⋮
 			</div>
@@ -438,10 +525,7 @@
 			</div>
 
 			<!-- Action buttons -->
-			<div
-				class="flex items-center gap-1 opacity-0 transition-opacity"
-				class:opacity-100={hoveredTaskId === task.id}
-			>
+			<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
 				{#if editingTaskId === task.id}
 					<Button onclick={saveEdit} size="sm" class="h-6 px-2 text-xs">Save</Button>
 					<Button onclick={cancelEdit} variant="outline" size="sm" class="h-6 px-2 text-xs"
