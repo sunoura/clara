@@ -93,15 +93,27 @@ class Workspace(SQLModel, table=True):
     tasks: List["Task"] = Relationship(back_populates="workspace")
     notes: List["Note"] = Relationship(
         back_populates="workspace",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='workspace', Note.attached_to_id==Workspace.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='workspace', Note.attached_to_id==Workspace.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "project,task"
+        }
     )
     calendar_events: List["CalendarEvent"] = Relationship(
         back_populates="workspace",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='workspace', CalendarEvent.linked_to_id==Workspace.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='workspace', CalendarEvent.linked_to_id==Workspace.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "project,task"
+        }
     )
     reminders: List["Reminder"] = Relationship(
         back_populates="workspace",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='workspace', Reminder.linked_to_id==Workspace.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='workspace', Reminder.linked_to_id==Workspace.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "project,task"
+        }
     )
 
 
@@ -121,15 +133,27 @@ class Project(SQLModel, table=True):
     tasks: List["Task"] = Relationship(back_populates="project")
     notes: List["Note"] = Relationship(
         back_populates="project",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='project', Note.attached_to_id==Project.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='project', Note.attached_to_id==Project.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "notes"
+        }
     )
     calendar_events: List["CalendarEvent"] = Relationship(
         back_populates="project",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='project', CalendarEvent.linked_to_id==Project.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='project', CalendarEvent.linked_to_id==Project.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "calendar_events"
+        }
     )
     reminders: List["Reminder"] = Relationship(
         back_populates="project",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='project', Reminder.linked_to_id==Project.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='project', Reminder.linked_to_id==Project.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "reminders"
+        }
     )
 
 
@@ -142,6 +166,7 @@ class Task(SQLModel, table=True):
     workspace_id: int = Field(foreign_key="workspaces.id")
     project_id: Optional[int] = Field(default=None, foreign_key="projects.id")
     parent_task_id: Optional[int] = Field(default=None, foreign_key="tasks.id")
+    order_index: int = Field(default=0)  # For ordering tasks within their parent/workspace
     due_date: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -157,15 +182,27 @@ class Task(SQLModel, table=True):
     subtasks: List["Task"] = Relationship(back_populates="parent_task")
     notes: List["Note"] = Relationship(
         back_populates="task",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='task', Note.attached_to_id==Task.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='task', Note.attached_to_id==Task.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "notes,notes"
+        }
     )
     calendar_events: List["CalendarEvent"] = Relationship(
         back_populates="task",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='task', CalendarEvent.linked_to_id==Task.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='task', CalendarEvent.linked_to_id==Task.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "calendar_events,calendar_events"
+        }
     )
     reminders: List["Reminder"] = Relationship(
         back_populates="task",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='task', Reminder.linked_to_id==Task.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='task', Reminder.linked_to_id==Task.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "reminders,reminders"
+        }
     )
 
 
@@ -182,15 +219,27 @@ class Note(SQLModel, table=True):
     # Relationships (polymorphic)
     workspace: Optional[Workspace] = Relationship(
         back_populates="notes",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='workspace', Note.attached_to_id==Workspace.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='workspace', Note.attached_to_id==Workspace.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "notes,notes"
+        }
     )
     project: Optional[Project] = Relationship(
         back_populates="notes",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='project', Note.attached_to_id==Project.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='project', Note.attached_to_id==Project.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "notes"
+        }
     )
     task: Optional[Task] = Relationship(
         back_populates="notes",
-        sa_relationship_kwargs={"primaryjoin": "and_(Note.attached_to_type=='task', Note.attached_to_id==Task.id)", "foreign_keys": "[Note.attached_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Note.attached_to_type=='task', Note.attached_to_id==Task.id)", 
+            "foreign_keys": "[Note.attached_to_id]",
+            "overlaps": "notes"
+        }
     )
 
 
@@ -209,15 +258,27 @@ class CalendarEvent(SQLModel, table=True):
     # Relationships (polymorphic)
     workspace: Optional[Workspace] = Relationship(
         back_populates="calendar_events",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='workspace', CalendarEvent.linked_to_id==Workspace.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='workspace', CalendarEvent.linked_to_id==Workspace.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "calendar_events,calendar_events"
+        }
     )
     project: Optional[Project] = Relationship(
         back_populates="calendar_events",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='project', CalendarEvent.linked_to_id==Project.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='project', CalendarEvent.linked_to_id==Project.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "calendar_events"
+        }
     )
     task: Optional[Task] = Relationship(
         back_populates="calendar_events",
-        sa_relationship_kwargs={"primaryjoin": "and_(CalendarEvent.linked_to_type=='task', CalendarEvent.linked_to_id==Task.id)", "foreign_keys": "[CalendarEvent.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(CalendarEvent.linked_to_type=='task', CalendarEvent.linked_to_id==Task.id)", 
+            "foreign_keys": "[CalendarEvent.linked_to_id]",
+            "overlaps": "calendar_events"
+        }
     )
 
 
@@ -235,15 +296,27 @@ class Reminder(SQLModel, table=True):
     # Relationships (polymorphic)
     workspace: Optional[Workspace] = Relationship(
         back_populates="reminders",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='workspace', Reminder.linked_to_id==Workspace.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='workspace', Reminder.linked_to_id==Workspace.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "reminders,reminders"
+        }
     )
     project: Optional[Project] = Relationship(
         back_populates="reminders",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='project', Reminder.linked_to_id==Project.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='project', Reminder.linked_to_id==Project.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "reminders"
+        }
     )
     task: Optional[Task] = Relationship(
         back_populates="reminders",
-        sa_relationship_kwargs={"primaryjoin": "and_(Reminder.linked_to_type=='task', Reminder.linked_to_id==Task.id)", "foreign_keys": "[Reminder.linked_to_id]"}
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Reminder.linked_to_type=='task', Reminder.linked_to_id==Task.id)", 
+            "foreign_keys": "[Reminder.linked_to_id]",
+            "overlaps": "reminders"
+        }
     )
 
 

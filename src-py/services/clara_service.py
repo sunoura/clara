@@ -134,7 +134,38 @@ class ClaraService:
 
     # Task operations
     def create_task(self, task_data: TaskCreate) -> Task:
-        task = Task(**task_data.model_dump())
+        # Check for circular dependency if parent_task_id is specified
+        if task_data.parent_task_id is not None:
+            # For new tasks, we just need to ensure the parent exists
+            parent_task = self.session.get(Task, task_data.parent_task_id)
+            if not parent_task:
+                raise ValueError(f"Parent task {task_data.parent_task_id} does not exist")
+        
+        # Calculate the next order_index for this parent/workspace
+        if task_data.parent_task_id is not None:
+            # Get the highest order_index for this parent
+            max_order = self.session.exec(
+                select(Task.order_index).where(
+                    Task.parent_task_id == task_data.parent_task_id,
+                    Task.archived_at.is_(None)
+                ).order_by(Task.order_index.desc()).limit(1)
+            ).first()
+        else:
+            # Get the highest order_index for root tasks in this workspace
+            max_order = self.session.exec(
+                select(Task.order_index).where(
+                    Task.workspace_id == task_data.workspace_id,
+                    Task.parent_task_id.is_(None),
+                    Task.archived_at.is_(None)
+                ).order_by(Task.order_index.desc()).limit(1)
+            ).first()
+        
+        next_order = (max_order or 0) + 1
+        
+        task_dict = task_data.model_dump()
+        task_dict['order_index'] = next_order
+        task = Task(**task_dict)
+        
         self.session.add(task)
         self.session.commit()
         self.session.refresh(task)
@@ -149,7 +180,7 @@ class ClaraService:
             select(Task).where(
                 Task.workspace_id == workspace_id,
                 Task.archived_at.is_(None)
-            )
+            ).order_by(Task.order_index)
         ).all()
 
     def get_tasks_by_project(self, project_id: int) -> List[Task]:
@@ -157,7 +188,7 @@ class ClaraService:
             select(Task).where(
                 Task.project_id == project_id,
                 Task.archived_at.is_(None)
-            )
+            ).order_by(Task.order_index)
         ).all()
 
     def get_subtasks(self, parent_task_id: int) -> List[Task]:
@@ -165,7 +196,7 @@ class ClaraService:
             select(Task).where(
                 Task.parent_task_id == parent_task_id,
                 Task.archived_at.is_(None)
-            )
+            ).order_by(Task.order_index)
         ).all()
 
     def update_task(self, task_id: int, task_data: TaskUpdate) -> Optional[Task]:
@@ -174,6 +205,19 @@ class ClaraService:
             return None
         
         update_data = task_data.model_dump(exclude_unset=True)
+        
+        # Check for circular dependency if parent_task_id is being updated
+        if 'parent_task_id' in update_data and update_data['parent_task_id'] is not None:
+            new_parent_id = update_data['parent_task_id']
+            
+            # Prevent self-assignment
+            if new_parent_id == task_id:
+                raise ValueError(f"Task {task_id} cannot be its own parent")
+            
+            # Prevent circular dependency
+            if self._would_create_circular_dependency(task_id, new_parent_id):
+                raise ValueError(f"Setting parent_task_id to {new_parent_id} would create a circular dependency")
+        
         for key, value in update_data.items():
             setattr(task, key, value)
         
@@ -182,6 +226,30 @@ class ClaraService:
         self.session.refresh(task)
         self.log_activity("update", "task", task.id, update_data)
         return task
+
+    def reorder_tasks(self, task_ids: List[int], parent_task_id: Optional[int] = None, workspace_id: Optional[int] = None) -> bool:
+        """
+        Reorder tasks by setting their order_index based on the provided list order.
+        Either parent_task_id or workspace_id should be provided to identify the scope.
+        """
+        try:
+            for index, task_id in enumerate(task_ids):
+                task = self.session.get(Task, task_id)
+                if task:
+                    task.order_index = index
+                    task.updated_at = datetime.now(UTC)
+            
+            self.session.commit()
+            self.log_activity("reorder", "task", 0, {
+                "task_ids": task_ids,
+                "parent_task_id": parent_task_id,
+                "workspace_id": workspace_id
+            })
+            return True
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error reordering tasks: {e}")
+            return False
 
     def archive_task(self, task_id: int) -> Optional[Task]:
         task = self.session.get(Task, task_id)
@@ -205,10 +273,70 @@ class ClaraService:
         self.log_activity("complete", "task", task.id)
         return task
 
+    def _would_create_circular_dependency(self, task_id: int, potential_parent_id: int) -> bool:
+        """
+        Check if setting potential_parent_id as parent of task_id would create a circular dependency.
+        This happens if potential_parent_id is actually a descendant of task_id.
+        """
+        return self._is_task_descendant(task_id, potential_parent_id)
+    
+    def _is_task_descendant(self, ancestor_task_id: int, potential_descendant_id: int) -> bool:
+        """
+        Check if potential_descendant_id is a descendant of ancestor_task_id.
+        Uses iterative approach to avoid stack overflow on deep hierarchies.
+        """
+        # Get all direct children of the ancestor
+        children_to_check = [ancestor_task_id]
+        visited = set()
+        
+        while children_to_check:
+            current_id = children_to_check.pop()
+            
+            # Avoid infinite loops (shouldn't happen with proper data, but safety first)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            
+            # Get direct children of current task
+            children = self.session.exec(
+                select(Task).where(
+                    Task.parent_task_id == current_id,
+                    Task.archived_at.is_(None)
+                )
+            ).all()
+            
+            for child in children:
+                if child.id == potential_descendant_id:
+                    return True
+                children_to_check.append(child.id)
+        
+        return False
+
     # Hierarchical snapshot methods
-    def build_task_snapshot(self, task: Task) -> TaskSnapshot:
+    def build_task_snapshot(self, task: Task, visited_task_ids: set = None) -> TaskSnapshot:
         """Build a complete task snapshot with all nested data"""
-        subtasks = [self.build_task_snapshot(subtask) for subtask in self.get_subtasks(task.id)]
+        if visited_task_ids is None:
+            visited_task_ids = set()
+        
+        # Prevent infinite recursion from circular dependencies
+        if task.id in visited_task_ids:
+            # Log the circular dependency and return a minimal snapshot
+            print(f"Warning: Circular dependency detected for task {task.id}")
+            return TaskSnapshot(
+                id=task.id,
+                title=f"{task.title} [CIRCULAR DEPENDENCY DETECTED]",
+                status=task.status,
+                due_date=task.due_date,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+                subtasks=[],  # Don't include subtasks to break the cycle
+                notes=[],
+                calendar_events=[],
+                reminders=[]
+            )
+        
+        visited_task_ids.add(task.id)
+        subtasks = [self.build_task_snapshot(subtask, visited_task_ids.copy()) for subtask in self.get_subtasks(task.id)]
         
         notes = self.session.exec(
             select(Note).where(
@@ -300,7 +428,7 @@ class ClaraService:
                 Task.project_id.is_(None),
                 Task.parent_task_id.is_(None),
                 Task.archived_at.is_(None)
-            )
+            ).order_by(Task.order_index)
         ).all()
         task_snapshots = [self.build_task_snapshot(task) for task in workspace_tasks]
         

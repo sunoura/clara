@@ -7,7 +7,7 @@ from services.clara_service import ClaraService
 from data.models.clara_models import (
     WorkspaceCreate, WorkspaceRead, WorkspaceUpdate, WorkspaceSnapshot,
     ProjectCreate, ProjectRead, ProjectUpdate, ProjectSnapshot,
-    TaskCreate, TaskRead, TaskUpdate, TaskSnapshot,
+    TaskCreate, TaskRead, TaskUpdate, TaskSnapshot, TaskReorderRequest,
     NoteCreate, NoteRead, NoteUpdate,
     CalendarEventCreate, CalendarEventRead, CalendarEventUpdate,
     ReminderCreate, ReminderRead, ReminderUpdate,
@@ -126,7 +126,11 @@ def create_task(
     task: TaskCreate,
     service: ClaraService = Depends(get_clara_service)
 ):
-    return service.create_task(task)
+    try:
+        return service.create_task(task)
+    except ValueError as e:
+        # Handle validation errors (e.g., parent task not found)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/workspaces/{workspace_id}/tasks/", response_model=List[TaskRead])
@@ -162,10 +166,14 @@ def update_task(
     task: TaskUpdate,
     service: ClaraService = Depends(get_clara_service)
 ):
-    updated_task = service.update_task(task_id, task)
-    if not updated_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return updated_task
+    try:
+        updated_task = service.update_task(task_id, task)
+        if not updated_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return updated_task
+    except ValueError as e:
+        # Handle circular dependency and other validation errors
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/tasks/{task_id}/complete", response_model=TaskRead)
@@ -188,6 +196,21 @@ def archive_task(
     if not archived_task:
         raise HTTPException(status_code=404, detail="Task not found")
     return archived_task
+
+
+@router.post("/tasks/reorder")
+def reorder_tasks(
+    reorder_request: TaskReorderRequest,
+    service: ClaraService = Depends(get_clara_service)
+):
+    success = service.reorder_tasks(
+        task_ids=reorder_request.task_ids,
+        parent_task_id=reorder_request.parent_task_id,
+        workspace_id=reorder_request.workspace_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reorder tasks")
+    return {"success": True, "message": "Tasks reordered successfully"}
 
 
 # Snapshot endpoints - Core feature for fast JSON loading

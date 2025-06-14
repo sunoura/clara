@@ -161,6 +161,12 @@ class TagUpdate(BaseModel):
     color: Optional[str] = None
 
 
+class TaskReorderRequest(BaseModel):
+    task_ids: List[int]
+    parent_task_id: Optional[int] = None
+    workspace_id: Optional[int] = None
+
+
 # Nested/Hierarchical Models for JSON Snapshot
 class TaskSnapshot(BaseModel):
     id: int
