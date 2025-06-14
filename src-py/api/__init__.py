@@ -12,6 +12,7 @@ def create_api_router() -> APIRouter:
     from .memory_document_routes import router as memory_document_router
     from .interaction_routes import session_router, payload_router
     from .chat_routes import router as chat_router
+    from .clara_routes import router as clara_router
 
     # Memory and RAG routes
     api_router.include_router(memory_collection_router)
@@ -23,6 +24,9 @@ def create_api_router() -> APIRouter:
     
     # Chat routes
     api_router.include_router(chat_router)
+    
+    # Clara task management routes
+    api_router.include_router(clara_router)
 
     return api_router
 

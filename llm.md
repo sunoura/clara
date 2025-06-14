@@ -18,6 +18,8 @@ Every item (task, project, workspace) can have:
 
 * Reminders
 
+* Tags
+
 * The frontend loads a nested snapshot (raw JSON) for fast performance.
 
 * The backend checks data validity, handles syncing, and fetches additional detail.
@@ -54,7 +56,7 @@ This tree is stored and synced as a JSON structure and displayed in a drag/drop 
 * Backend integrity checker validates and persists structure
 * UI indicates sync status, failed saves, or conflicts
 * Basic search and filter functionality across items
-* Items can include notes, calendar events, and reminders
+* Items can include notes, calendar events, reminders, and tags
 
 ### Calendar View
 
@@ -85,6 +87,7 @@ This tree is stored and synced as a JSON structure and displayed in a drag/drop 
 * Structure operations as modifications to a nested tree of workspace > project > task
 * Sync-related failures should suggest retry logic or surface fallback states
 * Avoid operating directly on raw DB models; always work via tree context
+* Tags offer semantic filtering, priority suggestions, and flexible classification
 
 ---
 
@@ -173,3 +176,19 @@ This tree is stored and synced as a JSON structure and displayed in a drag/drop 
 * `data`: JSON blob of change details (diff or snapshot)
 * `created_at`: Timestamp
 * `archived_at`: Optional timestamp when the log entry was archived
+
+### 9. tags
+
+* `id`: Unique identifier
+* `label`: The tag name (e.g., "urgent", "design")
+* `color`: Optional color code or style class
+* `created_at`: Timestamp
+
+### 10. tagged\_items
+
+* `id`: Unique identifier
+* `tag_id`: Reference to a tag
+* `target_type`: "task", "project", or "workspace"
+* `target_id`: ID of the item being tagged
+* `created_at`: Timestamp
+* `archived_at`: Optional timestamp for when the tag was removed or archived
