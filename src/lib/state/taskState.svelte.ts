@@ -83,7 +83,22 @@ class TaskState {
 		}));
 	}
 
-	private saveTasks() {
+	deleteTask(taskId: number) {
+		this.tasks = this.removeTaskFromArray(this.tasks, taskId);
+		this.saveTasks();
+	}
+
+	private removeTaskFromArray(tasks: Task[], taskId: number): Task[] {
+		return tasks.filter(task => {
+			if (task.id === taskId) {
+				return false;
+			}
+			task.subtasks = this.removeTaskFromArray(task.subtasks, taskId);
+			return true;
+		});
+	}
+
+	saveTasks() {
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('simple-tasks', JSON.stringify({
 				tasks: this.tasks,
