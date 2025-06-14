@@ -24,7 +24,6 @@
 	let editingTaskId = $state<number | null>(null);
 	let editingTitle = $state('');
 
-	// Simple drag and drop state - based on the example
 	let mouseYCoordinate = $state<number | null>(null);
 	let distanceTopGrabbedVsPointer = $state<number | null>(null);
 	let draggingTask = $state<Task | null>(null);
@@ -483,7 +482,7 @@
 {#snippet taskCard(task: Task, index: number, parentNumbers: number[], parentTask?: Task)}
 	<div class="group">
 		<div
-			class="flex items-center gap-3 cursor-move"
+			class="flex items-center gap-3 cursor-move items-start"
 			draggable="true"
 			ondragstart={(e) => handleDragStart(e, task, index, parentTask)}
 			ondrag={handleDrag}
@@ -491,14 +490,10 @@
 			ondragend={handleDragEnd}
 		>
 			<!-- Drag handle -->
-			<div
-				class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-			>
-				⋮⋮
-			</div>
+			<div class="text-gray-400 hover:text-gray-600">⋮⋮</div>
 
 			<!-- Task number -->
-			<span class="text-sm text-gray-500 font-mono min-w-[2rem]">
+			<span class="text-sm text-gray-500 font-mono min-w-[1.2rem] pr-1 pt-[0.17rem]">
 				{getTaskNumber(index, parentNumbers)}
 			</span>
 
@@ -525,7 +520,7 @@
 			</div>
 
 			<!-- Action buttons -->
-			<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+			<div class="flex items-center gap-1">
 				{#if editingTaskId === task.id}
 					<Button onclick={saveEdit} size="sm" class="h-6 px-2 text-xs">Save</Button>
 					<Button onclick={cancelEdit} variant="outline" size="sm" class="h-6 px-2 text-xs"
@@ -553,7 +548,7 @@
 		<!-- Add subtask input -->
 		{#if showingInputForTask === task.id}
 			<div
-				class="mt-3 ml-8 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+				class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
 			>
 				<input
 					bind:value={newTaskTitle}
